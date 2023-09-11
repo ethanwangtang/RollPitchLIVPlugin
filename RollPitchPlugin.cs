@@ -19,20 +19,75 @@ using System.Collections;
 using System.Collections.Generic;
 using System;
 using UnityEngine;
+using Newtonsoft.Json;
+using System;
+using System.IO;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 
 // User defined settings which will be serialized and deserialized with Newtonsoft Json.Net.
 // Only public variables will be serialized.
-public class RollPitchPluginSettings : IPluginSettings {
+public class RollPitchPluginSettings : IPluginSettings
+{
+    private static string filePath = "RollPitchPlugin/settings.json";
+
     public float fov = 90f;
     public float distance = 3f;
-    public float speed = .5f;
+    public float speed = 1f;
     public float rollSensitivity = 0.75f;
     public float pitchSensitivity = 0.50f;
     public float smoothingFactor = 0.25f;
+
+    // Method to load settings from a JSON file
+    public static RollPitchPluginSettings LoadFromJson()
+    {
+        try
+        {
+            // Get the directory of the DLL file
+            string dllDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            // Construct the file paths relative to the DLL directory
+            string settingsFilePath = Path.Combine(dllDirectory, filePath);
+
+            string json = File.ReadAllText(settingsFilePath);
+            return JsonConvert.DeserializeObject<RollPitchPluginSettings>(json);
+        }
+        catch (Exception ex)
+        {
+            // Handle any exceptions that may occur during loading
+            // For example, you can log the error and return default settings
+            Console.WriteLine("Error loading settings from JSON: " + ex.Message);
+            return new RollPitchPluginSettings();
+        }
+    }
+
+    // Method to save settings to a JSON file
+    public void SaveToJson()
+    {
+        try
+        {
+            // Get the directory of the DLL file
+            string dllDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            // Construct the file paths relative to the DLL directory
+            string settingsFilePath = Path.Combine(dllDirectory, filePath);
+
+            //Create directory to make file
+            Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath));
+
+            string json = JsonConvert.SerializeObject(this);
+            File.WriteAllText(settingsFilePath, json);
+        }
+        catch (Exception ex)
+        {
+            // Handle any exceptions that may occur during saving
+            Console.WriteLine("Error saving settings to JSON: " + ex.Message);
+        }
+    }
 }
 
+
 // The class must implement IPluginCameraBehaviour to be recognized by LIV as a plugin.
-public class RollPitchPlugin : IPluginCameraBehaviour {
+public class RollPitchPlugin : IPluginCameraBehaviour
+{
 
     // Store your settings localy so you can access them.
     RollPitchPluginSettings _settings = new RollPitchPluginSettings();
@@ -66,6 +121,9 @@ public class RollPitchPlugin : IPluginCameraBehaviour {
     // The pluginCameraHelper is provided to you to help you with Player/Camera related operations.
     public void OnActivate(PluginCameraHelper helper)
     {
+        //sort of stupid, load settings if they exist otherwise it defaults and we create a json file for someone to edit.
+        _settings = RollPitchPluginSettings.LoadFromJson();
+        _settings.SaveToJson();
         _helper = helper;
 
         Transform headTransform = _helper.playerHead;
@@ -122,12 +180,13 @@ public class RollPitchPlugin : IPluginCameraBehaviour {
         Quaternion targetCameraRotation = Quaternion.LookRotation(newRotation, rollRotation);
 
         // Smooth out the camera rotation. I need the value of the previous frame's rotation for this.
-        Quaternion smoothedRotation = Quaternion.Slerp(previousFrameRotation, targetCameraRotation, smoothingFactor);
+        Quaternion smoothedRotation = Quaternion.Slerp(previousFrameRotation, targetCameraRotation, _settings.smoothingFactor);
 
-        _helper.UpdateCameraPose(lockedPosition, targetCameraRotation);
+        _helper.UpdateCameraPose(lockedPosition, smoothedRotation);
         _helper.UpdateFov(_settings.fov);
 
-        previousFrameRotation = targetCameraRotation;
+        //this is hear so that next frame understands what the last frame (this frame) is/was.
+        previousFrameRotation = smoothedRotation;
     }
 
     // OnLateUpdate is called after OnUpdate also everyframe and has a higher chance that transform updates are more recent.
