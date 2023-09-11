@@ -105,7 +105,7 @@ public class RollPitchPlugin : IPluginCameraBehaviour
     // Readable plugin name "Keep it short".
     public string name => "Roll&Pitch Cam";
     // Author name.
-    public string author => "***REMOVED***";
+    public string author => "";
     // Plugin version.
     public string version => "1.0";
     // Localy store the camera helper provided by LIV.
